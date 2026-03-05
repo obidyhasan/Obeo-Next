@@ -1,4 +1,3 @@
-
 "use server";
 
 import { serverFetch } from "@/lib/server-fetch";
@@ -13,26 +12,34 @@ export async function logout() {
   const hostname = host.split(":")[0];
 
   try {
+    // Attempt to notify the backend about the logout
     await serverFetch.post("/auth/logout");
   } catch (error) {
     console.error("Logout request failed:", error);
   } finally {
-    // 1. Clear host‑only cookies (no domain)
+    // 1. Clear host-only cookies (no domain)
     await deleteCookie("accessToken");
     await deleteCookie("refreshToken");
 
-    // 2. Clear domain‑scoped cookies
+    // 2. Clear domain-scoped cookies
+    // We clear for the root domain (with and without leading dot) and common subdomains
     const domains = isProduction 
-      ? [`.${rootDomain}`, `admin.${rootDomain}`, `hotel.${rootDomain}`]
-      : ["localhost", "admin.localhost", "hotel.localhost"];
+      ? [`.${rootDomain}`, rootDomain, `admin.${rootDomain}`, `hotel.${rootDomain}`]
+      : ["localhost", ".localhost", "admin.localhost", "hotel.localhost"];
 
     for (const domain of domains) {
       await deleteCookie("accessToken", { domain });
       await deleteCookie("refreshToken", { domain });
     }
 
-    const { revalidateTag } = await import("next/cache");
-    (revalidateTag as any)("user", "max");
+    // 3. Revalidate cache tags if applicable
+    try {
+      const { revalidateTag } = await import("next/cache");
+      (revalidateTag as any)("user", "max");
+    } catch (e) {
+      console.error("Revalidation failed during logout:", e);
+    }
+
     console.log(`[Logout] Robust cookie deletion completed for ${hostname}`);
   }
 
@@ -42,5 +49,4 @@ export async function logout() {
   } else {
     redirect("/login");
   }
-
 }

@@ -1,4 +1,3 @@
-
 "use server";
 
 import { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
@@ -10,14 +9,13 @@ export const setCookie = async (
   options: Partial<ResponseCookie> & { domain?: string },
 ) => {
   const cookieStore = await cookies();
-  const host = (await headers()).get("host") || "";
-  const hostname = host.split(":")[0];
-
+  
   const cookieOptions: any = {
     ...options,
     path: "/",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
   };
 
   if (options.domain) {
@@ -25,7 +23,7 @@ export const setCookie = async (
   }
 
   console.log(
-    `[setCookie] Setting ${key} (Host-Only: ${!options.domain}, Domain: ${options.domain})`,
+    `[setCookie] Setting ${key} (Domain: ${options.domain || "Host-Only"})`,
   );
 
   try {
@@ -33,12 +31,11 @@ export const setCookie = async (
   } catch (error) {
     console.error(`[setCookie] Error setting ${key}:`, error);
   }
-
 };
 
 export const getCookie = async (key: string) => {
   const cookieStore = await cookies();
-  return cookieStore.get(key)?.value || null;
+  return (await cookieStore).get(key)?.value || null;
 };
 
 export const deleteCookie = async (
@@ -61,16 +58,14 @@ export const deleteCookie = async (
       ...(options?.domain ? { domain: options.domain } : {}),
     };
 
-    console.log(`[deleteCookie] Clearing ${key} with options:`, commonOptions);
-
-    // Try both delete and setting expired to be extremely thorough
-    cookieStore.delete({
+    // 1. Use the built-in delete method
+    (await cookieStore).delete({
       name: key,
       ...commonOptions,
     });
 
-    // Manually setting to expired as a fallback
-    cookieStore.set(key, "", {
+    // 2. Fallback: Set to expired with same options
+    (await cookieStore).set(key, "", {
       ...commonOptions,
       expires: new Date(0),
       maxAge: -1,
@@ -79,5 +74,4 @@ export const deleteCookie = async (
   } catch (error) {
     console.error(`[deleteCookie] Error deleting ${key}:`, error);
   }
-
 };
